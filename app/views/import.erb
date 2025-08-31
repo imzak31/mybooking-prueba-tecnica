@@ -1,0 +1,913 @@
+<div class="container mt-4">
+  <div class="row">
+    <div class="col-12">
+      <h1>🔄 Importación de Precios</h1>
+      <p class="text-muted">Importa precios masivamente desde un archivo CSV</p>
+      
+      <!-- Panel de Información -->
+      <div class="alert alert-info" role="alert">
+        <h5>📋 Formato del CSV</h5>
+        <p><strong>Columnas requeridas:</strong></p>
+        <ul class="mb-1">
+          <li><code>category_code</code> - Código de categoría (ej: A, B, C, A1)</li>
+          <li><code>rental_location_name</code> - Nombre de sucursal (ej: Barcelona, Menorca)</li>
+          <li><code>rate_type_name</code> - Tipo de tarifa (ej: Estándar, Premium)</li>
+          <li><code>season_name</code> - Temporada (ej: Alta, Media, Baja) - vacío para sin temporadas</li>
+          <li><code>time_measurement</code> - Unidad (days, hours, minutes, months)</li>
+          <li><code>units</code> - Número de unidades</li>
+          <li><code>price</code> - Precio</li>
+        </ul>
+        <p class="mb-0"><strong>Columnas opcionales:</strong> <code>included_km</code>, <code>extra_km_price</code></p>
+      </div>
+
+      <!-- Formulario de Importación -->
+      <div class="card">
+        <div class="card-header">
+          <h5>📁 Seleccionar Archivo CSV</h5>
+        </div>
+        <div class="card-body">
+          <form id="importForm" enctype="multipart/form-data">
+            <div class="mb-3">
+              <label for="csv_file" class="form-label">Archivo CSV:</label>
+              <input type="file" class="form-control" id="csv_file" name="csv_file" accept=".csv" required>
+              <div class="form-text">Tamaño máximo: 10MB</div>
+            </div>
+            
+            <div class="d-flex gap-2">
+              <button type="button" class="btn btn-outline-primary" onclick="previewImport()">
+                🔍 Vista Previa
+              </button>
+              <button type="button" class="btn btn-primary" onclick="executeImport()">
+                ⚡ Importar
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      <!-- Panel de Resultados -->
+      <div id="resultsPanel" class="mt-4" style="display: none;">
+        <div class="card">
+          <div class="card-header">
+            <h5 id="resultsTitle">📊 Resultados</h5>
+          </div>
+          <div class="card-body">
+            <div id="resultsContent"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Loader -->
+      <div id="loadingPanel" class="mt-4" style="display: none;">
+        <div class="card">
+          <div class="card-body text-center">
+            <div class="spinner-border text-primary" role="status">
+              <span class="visually-hidden">Procesando...</span>
+            </div>
+            <p class="mt-2">Procesando archivo...</p>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- Modal de errores detallado -->
+<div class="modal fade" id="errorsModal" tabindex="-1" aria-labelledby="errorsModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-xl">
+    <div class="modal-content">
+      <div class="modal-header bg-warning">
+        <h5 class="modal-title" id="errorsModalLabel">
+          <i class="fas fa-exclamation-triangle me-2"></i>Errores en Importación
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <div class="alert alert-info">
+          <i class="fas fa-info-circle me-2"></i>
+          <strong>¿Qué puedes hacer?</strong>
+          <ul class="mb-0 mt-2">
+            <li>Revisar cada error y aplicar las sugerencias</li>
+            <li>Eliminar filas problemáticas que no se pueden corregir</li>
+            <li>Reintentar la importación solo con registros válidos</li>
+          </ul>
+        </div>
+        
+        <div id="errorsTableContainer">
+          <div class="table-responsive">
+            <table class="table table-hover">
+              <thead class="table-light">
+                <tr>
+                  <th style="width: 50px;">Línea</th>
+                  <th style="width: 80px;">Categoría</th>
+                  <th style="width: 120px;">Sucursal</th>
+                  <th style="width: 100px;">Tarifa</th>
+                  <th style="width: 100px;">Temporada</th>
+                  <th style="width: 80px;">Unidad</th>
+                  <th style="width: 60px;">Cantidad</th>
+                  <th style="width: 80px;">Precio</th>
+                  <th style="width: 200px;">Error</th>
+                  <th style="width: 120px;">Acciones</th>
+                </tr>
+              </thead>
+              <tbody id="errorsTableBody">
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <div class="d-flex justify-content-between w-100">
+          <div>
+            <span class="text-muted small">
+              <i class="fas fa-info-circle me-1"></i>
+              <span id="errorStatsText">Errores encontrados</span>
+            </span>
+          </div>
+          <div>
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+            <button type="button" class="btn btn-warning" onclick="retryImportWithCorrectedData()">
+              <i class="fas fa-check me-2"></i>Importar con Correcciones
+            </button>
+            <button type="button" class="btn btn-primary" onclick="downloadCorrectedCsv()">
+              <i class="fas fa-download me-2"></i>Descargar CSV Corregido
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  async function previewImport() {
+    const fileInput = document.getElementById('csv_file');
+    
+    if (!fileInput.files[0]) {
+      alert('Por favor selecciona un archivo CSV');
+      return;
+    }
+
+    showLoading('🔍 Generando vista previa...');
+
+    const formData = new FormData();
+    formData.append('csv_file', fileInput.files[0]);
+    formData.append('max_rows', 10);
+
+    try {
+      const response = await fetch('/admin/import/preview', {
+        method: 'POST',
+        body: formData
+      });
+
+      const result = await response.json();
+      hideLoading();
+
+      if (result.success) {
+        showPreviewResults(result.data);
+      } else {
+        showError('Error en vista previa', result.message);
+      }
+    } catch (error) {
+      hideLoading();
+      showError('Error de conexión', error.message);
+    }
+  }
+
+  async function executeImport() {
+    const fileInput = document.getElementById('csv_file');
+    
+    if (!fileInput.files[0]) {
+      alert('Por favor selecciona un archivo CSV');
+      return;
+    }
+
+    if (!confirm('¿Estás seguro de que quieres importar este archivo? Esta acción modificará la base de datos.')) {
+      return;
+    }
+
+    showLoading('⚡ Importando datos...');
+
+    const formData = new FormData();
+    formData.append('csv_file', fileInput.files[0]);
+
+    try {
+      const response = await fetch('/admin/import', {
+        method: 'POST',
+        body: formData
+      });
+
+      const result = await response.json();
+      hideLoading();
+
+      if (result.success) {
+        showImportSuccess(result);
+      } else {
+        showImportError(result);
+      }
+    } catch (error) {
+      hideLoading();
+      showError('Error de conexión', error.message);
+    }
+  }
+
+  function showPreviewResults(data) {
+    const title = document.getElementById('resultsTitle');
+    const content = document.getElementById('resultsContent');
+    
+    title.textContent = '🔍 Vista Previa de Importación';
+    
+    // Extraer valores de la estructura correcta
+    const sampleSize = data.analysis_summary.sample_size;
+    const estimatedIssues = data.analysis_summary.estimated_issues;
+    const successRate = data.analysis_summary.estimated_success_rate;
+    
+    let html = `
+      <div class="alert alert-info">
+        <strong>Muestra analizada:</strong> ${sampleSize} filas<br>
+        <strong>Problemas estimados:</strong> ${estimatedIssues} filas<br>
+        <strong>Tasa de éxito estimada:</strong> ${successRate}%
+      </div>
+    `;
+
+    if (data.sample_analysis && data.sample_analysis.length > 0) {
+      html += '<h6>Análisis por fila:</h6><ul class="list-group">';
+      
+      data.sample_analysis.forEach((row, index) => {
+        const status = row.status === 'valid' ? '✅' : '❌';
+        const alertClass = row.status === 'valid' ? 'list-group-item-success' : 'list-group-item-danger';
+        
+        let description = '';
+        if (row.status === 'valid' && row.analysis && row.analysis.data_summary) {
+          const summary = row.analysis.data_summary;
+          description = `${summary.category} en ${summary.location} - ${summary.season} (${summary.units}): ${summary.price}`;
+        } else if (row.status === 'invalid' && row.analysis && row.analysis.error_details) {
+          // Mostrar error específico en lugar de "Error desconocido"
+          description = row.analysis.error_details.message || 'Error de validación';
+        } else {
+          description = row.error || 'Error desconocido';
+        }
+        
+        html += `
+          <li class="list-group-item ${alertClass}">
+            ${status} <strong>Línea ${row.line_in_file}:</strong> ${description}
+          </li>
+        `;
+      });
+      
+      html += '</ul>';
+    }
+
+    if (successRate < 80) {
+      html += '<div class="alert alert-warning mt-2">⚠️ Baja tasa de éxito. Revisa los errores antes de importar.</div>';
+    } else if (successRate >= 95) {
+      html += '<div class="alert alert-success mt-2">🎉 ¡Excelente! El archivo parece listo para importar.</div>';
+    }
+
+    content.innerHTML = html;
+    showResults();
+  }
+
+  function showImportSuccess(result) {
+    const title = document.getElementById('resultsTitle');
+    const content = document.getElementById('resultsContent');
+    
+    title.textContent = '✅ Importación Exitosa';
+    
+    const processedCount = result.data?.processed_count || 'N/A';
+    const createdCount = result.data?.created_count || 'N/A';
+    const updatedCount = result.data?.updated_count || 'N/A';
+    
+    const html = `
+      <div class="alert alert-success">
+        <h6>${result.message}</h6>
+        <ul class="mb-0">
+          <li><strong>Filas procesadas:</strong> ${processedCount}</li>
+          <li><strong>Precios creados:</strong> ${createdCount}</li>
+          <li><strong>Precios actualizados:</strong> ${updatedCount}</li>
+        </ul>
+      </div>
+    `;
+
+    content.innerHTML = html;
+    showResults();
+  }
+
+  function showImportError(result) {
+    console.log('Import error result:', result); // Debug log
+    
+    const title = document.getElementById('resultsTitle');
+    const content = document.getElementById('resultsContent');
+    
+    title.textContent = '❌ Error en Importación';
+    
+    let html = `
+      <div class="alert alert-danger">
+        <h6>${result.message}</h6>
+        <p class="mb-0">
+          <i class="fas fa-info-circle me-1"></i>
+          ${generateContextualMessage(result.report)}
+        </p>
+      </div>
+    `;
+
+    if (result.report && result.report.summary) {
+      html += `
+        <h6>Resumen:</h6>
+        <ul>
+          <li><strong>Total de filas:</strong> ${result.report.summary.total_rows}</li>
+          <li><strong>Exitosas:</strong> ${result.report.summary.successful_rows}</li>
+          <li><strong>Fallidas:</strong> ${result.report.summary.failed_rows}</li>
+          <li><strong>Tasa de éxito:</strong> ${result.report.summary.success_rate}%</li>
+        </ul>
+      `;
+
+      if (result.report.errors_by_type) {
+        html += '<h6>Tipos de error:</h6><ul>';
+        Object.entries(result.report.errors_by_type).forEach(([errorType, count]) => {
+          const friendlyErrorType = translateErrorType(errorType);
+          html += `<li><strong>${friendlyErrorType}:</strong> ${count} ${count === 1 ? 'error' : 'errores'}</li>`;
+        });
+        html += '</ul>';
+      }
+      
+      // Agregar botón para ver errores detallados
+      if (result.report && result.report.detailed_errors && result.report.detailed_errors.length > 0) {
+        console.log('Detailed errors found:', result.report.detailed_errors.length); // Debug log
+        
+        // Guardar errores en variable global en lugar de pasarlos como JSON en onclick
+        window.currentImportErrors = result.report.detailed_errors;
+        
+        html += `
+          <div class="mt-3">
+            <button type="button" class="btn btn-warning" onclick="showDetailedErrorsFromGlobal()">
+              <i class="fas fa-list me-2"></i>Ver Errores Detallados (${result.report.detailed_errors.length})
+            </button>
+          </div>
+        `;
+      } else {
+        console.log('No detailed errors found in result.report'); // Debug log
+      }
+    } else {
+      console.log('No report found in result'); // Debug log
+    }
+
+    content.innerHTML = html;
+    showResults();
+  }
+
+  function showError(title, message) {
+    const titleEl = document.getElementById('resultsTitle');
+    const content = document.getElementById('resultsContent');
+    
+    titleEl.textContent = title;
+    content.innerHTML = `<div class="alert alert-danger">${message}</div>`;
+    showResults();
+  }
+
+  function showLoading(message) {
+    const loadingPanel = document.getElementById('loadingPanel');
+    loadingPanel.querySelector('p').textContent = message;
+    loadingPanel.style.display = 'block';
+    hideResults();
+  }
+
+  function hideLoading() {
+    document.getElementById('loadingPanel').style.display = 'none';
+  }
+
+  function showResults() {
+    document.getElementById('resultsPanel').style.display = 'block';
+  }
+
+  function hideResults() {
+    document.getElementById('resultsPanel').style.display = 'none';
+  }
+
+  // Variables globales para manejar errores
+  let currentErrors = [];
+  let processedRows = [];
+
+  function translateErrorType(errorType) {
+    const errorTranslations = {
+      'Service::Concerns::PriceValidationConcern::PriceDefinitionNotFoundError': 'Categoría no configurada',
+      'PriceDefinitionNotFoundError': 'Categoría no configurada',
+      'InvalidSeasonError': 'Temporada inválida',
+      'InvalidUnitsError': 'Unidades no permitidas',
+      'InvalidPriceError': 'Precio inválido',
+      'ValidationError': 'Error de validación',
+      'CsvParsingError': 'Error de formato CSV',
+      'DatabaseError': 'Error de base de datos',
+      'UnknownError': 'Error desconocido'
+    };
+    
+    // Buscar traducción exacta primero
+    if (errorTranslations[errorType]) {
+      return errorTranslations[errorType];
+    }
+    
+    // Buscar por palabras clave
+    const lowerErrorType = errorType.toLowerCase();
+    if (lowerErrorType.includes('pricedefinitionnotfound') || lowerErrorType.includes('definition')) {
+      return 'Categoría no configurada';
+    } else if (lowerErrorType.includes('season')) {
+      return 'Temporada inválida';
+    } else if (lowerErrorType.includes('units')) {
+      return 'Unidades no permitidas';
+    } else if (lowerErrorType.includes('price')) {
+      return 'Precio inválido';
+    } else if (lowerErrorType.includes('validation')) {
+      return 'Error de validación';
+    } else if (lowerErrorType.includes('csv') || lowerErrorType.includes('parsing')) {
+      return 'Error de formato CSV';
+    } else {
+      // Si no encontramos traducción, extraer el nombre de la clase sin el namespace
+      const parts = errorType.split('::');
+      const className = parts[parts.length - 1];
+      return className.replace(/([A-Z])/g, ' $1').trim() || 'Error desconocido';
+    }
+  }
+
+  function generateContextualMessage(report) {
+    if (!report || !report.errors_by_type) {
+      return 'Revisa los errores detallados para más información.';
+    }
+    
+    const errorTypes = Object.keys(report.errors_by_type);
+    const primaryError = errorTypes[0];
+    
+    if (primaryError && primaryError.includes('PriceDefinitionNotFound')) {
+      return 'Las categorías A1 no están configuradas en el sistema. Necesitas crear las definiciones de precio correspondientes.';
+    } else if (primaryError && primaryError.includes('Season')) {
+      return 'Hay problemas con los nombres de temporadas en el archivo CSV.';
+    } else if (primaryError && primaryError.includes('Units')) {
+      return 'Algunas unidades no están permitidas para las categorías especificadas.';
+    } else {
+      return 'Revisa los errores detallados para ver las sugerencias de corrección.';
+    }
+  }
+
+  function showDetailedErrors(errors) {
+    try {
+      currentErrors = errors; // errors ya es un array de objetos
+      populateErrorsModal(currentErrors);
+      
+      // Mostrar modal usando Bootstrap
+      const modal = new bootstrap.Modal(document.getElementById('errorsModal'));
+      modal.show();
+    } catch (error) {
+      console.error('Error showing detailed errors:', error);
+      alert('Error mostrando errores detallados');
+    }
+  }
+
+  function showDetailedErrorsFromGlobal() {
+    try {
+      if (window.currentImportErrors && window.currentImportErrors.length > 0) {
+        showDetailedErrors(window.currentImportErrors);
+      } else {
+        alert('No hay errores detallados disponibles');
+      }
+    } catch (error) {
+      console.error('Error showing detailed errors from global:', error);
+      alert('Error mostrando errores detallados');
+    }
+  }
+
+  function populateErrorsModal(errors) {
+    const tbody = document.getElementById('errorsTableBody');
+    
+    if (!tbody) {
+      console.error('Error table body not found');
+      return;
+    }
+    
+    tbody.innerHTML = '';
+    
+    if (!errors || errors.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="10" class="text-center">No hay errores para mostrar</td></tr>';
+      return;
+    }
+    
+    updateErrorStats(errors);
+    
+    errors.forEach((error, index) => {
+      const row = document.createElement('tr');
+      row.id = `error-row-${index}`;
+      row.className = error.removed ? 'table-secondary' : '';
+      
+      const data = error.data || {};
+      const isEditing = error.isEditing || false;
+      
+      row.innerHTML = generateErrorRowHtml(error, index, data, isEditing);
+      tbody.appendChild(row);
+    });
+  }
+
+  function generateErrorRowHtml(error, index, data, isEditing) {
+    const lineNumber = error.line || 'N/A';
+    const errorMessage = error.error || error.message || 'Error desconocido';
+    
+    if (isEditing) {
+      return `
+        <td><span class="badge bg-warning">${lineNumber}</span></td>
+        <td>
+          <select class="form-select form-select-sm" onchange="updateErrorData(${index}, 'category_code', this.value)">
+            <option value="">Seleccionar...</option>
+            <option value="A" ${data.category_code === 'A' ? 'selected' : ''}>A - Categoría A</option>
+            <option value="B" ${data.category_code === 'B' ? 'selected' : ''}>B - Categoría B</option>
+            <option value="C" ${data.category_code === 'C' ? 'selected' : ''}>C - Categoría C</option>
+            <option value="${data.category_code}" ${!['A', 'B', 'C'].includes(data.category_code) ? 'selected' : ''}>${data.category_code || 'Personalizado'}</option>
+          </select>
+        </td>
+        <td>
+          <select class="form-select form-select-sm" onchange="updateErrorData(${index}, 'rental_location_name', this.value)">
+            <option value="">Seleccionar...</option>
+            <option value="Barcelona" ${data.rental_location_name === 'Barcelona' ? 'selected' : ''}>Barcelona</option>
+            <option value="Madrid" ${data.rental_location_name === 'Madrid' ? 'selected' : ''}>Madrid</option>
+            <option value="Valencia" ${data.rental_location_name === 'Valencia' ? 'selected' : ''}>Valencia</option>
+            <option value="Menorca" ${data.rental_location_name === 'Menorca' ? 'selected' : ''}>Menorca</option>
+            <option value="${data.rental_location_name}" ${!['Barcelona', 'Madrid', 'Valencia', 'Menorca'].includes(data.rental_location_name) ? 'selected' : ''}>${data.rental_location_name || 'Personalizado'}</option>
+          </select>
+        </td>
+        <td>
+          <select class="form-select form-select-sm" onchange="updateErrorData(${index}, 'rate_type_name', this.value)">
+            <option value="">Seleccionar...</option>
+            <option value="Estándar" ${data.rate_type_name === 'Estándar' ? 'selected' : ''}>Estándar</option>
+            <option value="Premium" ${data.rate_type_name === 'Premium' ? 'selected' : ''}>Premium</option>
+            <option value="${data.rate_type_name}" ${!['Estándar', 'Premium'].includes(data.rate_type_name) ? 'selected' : ''}>${data.rate_type_name || 'Personalizado'}</option>
+          </select>
+        </td>
+        <td>
+          <select class="form-select form-select-sm" onchange="updateErrorData(${index}, 'season_name', this.value)">
+            <option value="">Sin temporada</option>
+            <option value="Alta" ${data.season_name === 'Alta' ? 'selected' : ''}>Alta</option>
+            <option value="Media" ${data.season_name === 'Media' ? 'selected' : ''}>Media</option>
+            <option value="Baja" ${data.season_name === 'Baja' ? 'selected' : ''}>Baja</option>
+            <option value="${data.season_name}" ${!['', 'Alta', 'Media', 'Baja'].includes(data.season_name) ? 'selected' : ''}>${data.season_name || 'Personalizado'}</option>
+          </select>
+        </td>
+        <td><select class="form-select form-select-sm" onchange="updateErrorData(${index}, 'time_measurement', this.value)">
+              <option value="days" ${data.time_measurement === 'days' ? 'selected' : ''}>days</option>
+              <option value="hours" ${data.time_measurement === 'hours' ? 'selected' : ''}>hours</option>
+              <option value="minutes" ${data.time_measurement === 'minutes' ? 'selected' : ''}>minutes</option>
+              <option value="months" ${data.time_measurement === 'months' ? 'selected' : ''}>months</option>
+            </select></td>
+        <td>
+          <select class="form-select form-select-sm" onchange="updateErrorData(${index}, 'units', this.value)">
+            <option value="">Seleccionar...</option>
+            <option value="1" ${data.units == '1' ? 'selected' : ''}>1</option>
+            <option value="2" ${data.units == '2' ? 'selected' : ''}>2</option>
+            <option value="4" ${data.units == '4' ? 'selected' : ''}>4</option>
+            <option value="7" ${data.units == '7' ? 'selected' : ''}>7</option>
+            <option value="15" ${data.units == '15' ? 'selected' : ''}>15</option>
+            <option value="30" ${data.units == '30' ? 'selected' : ''}>30</option>
+            <option value="${data.units}" ${!['1', '2', '4', '7', '15', '30'].includes(data.units) ? 'selected' : ''}>${data.units || 'Personalizado'}</option>
+          </select>
+        </td>
+        <td><input type="number" class="form-control form-control-sm" value="${data.price || ''}" 
+                   onchange="updateErrorData(${index}, 'price', this.value)" placeholder="Precio" step="0.01" min="0"></td>
+        <td>
+          <small class="text-danger">
+            <i class="fas fa-exclamation-circle me-1"></i>
+            ${translateErrorType(errorMessage)}
+          </small>
+        </td>
+        <td>
+          <div class="btn-group-vertical btn-group-sm">
+            <button type="button" class="btn btn-sm btn-success" onclick="saveErrorRow(${index})" title="Guardar cambios">
+              <i class="fas fa-check"></i>
+            </button>
+            <button type="button" class="btn btn-sm btn-secondary" onclick="cancelEditErrorRow(${index})" title="Cancelar edición">
+              <i class="fas fa-times"></i>
+            </button>
+          </div>
+        </td>
+      `;
+    } else {
+      const rowClass = error.removed ? 'text-decoration-line-through opacity-50' : '';
+      const statusBadge = error.corrected ? 
+        '<span class="badge bg-success ms-1">Corregido</span>' : 
+        (error.removed ? '<span class="badge bg-secondary ms-1">Eliminado</span>' : '');
+      
+      return `
+        <td><span class="badge bg-danger">${lineNumber}</span>${statusBadge}</td>
+        <td class="${rowClass}">${data.category_code || '-'}</td>
+        <td class="${rowClass}">${data.rental_location_name || '-'}</td>
+        <td class="${rowClass}">${data.rate_type_name || '-'}</td>
+        <td class="${rowClass}">${data.season_name || '-'}</td>
+        <td class="${rowClass}">${data.time_measurement || '-'}</td>
+        <td class="${rowClass}">${data.units || '-'}</td>
+        <td class="${rowClass}">${data.price || '-'}</td>
+        <td>
+          <small class="text-danger">
+            <i class="fas fa-exclamation-circle me-1"></i>
+            ${translateErrorType(errorMessage)}
+          </small>
+        </td>
+        <td>
+          ${error.removed ? '' : `
+            <div class="btn-group-vertical btn-group-sm">
+              <button type="button" class="btn btn-sm btn-outline-primary" onclick="editErrorRow(${index})" title="Editar fila">
+                <i class="fas fa-edit"></i>
+              </button>
+              <button type="button" class="btn btn-sm btn-outline-danger" onclick="removeErrorRow(${index})" title="Eliminar fila">
+                <i class="fas fa-trash"></i>
+              </button>
+            </div>
+          `}
+        </td>
+      `;
+    }
+  }
+
+  function updateErrorStats(errors) {
+    const total = errors.length;
+    const removed = errors.filter(e => e.removed).length;
+    const corrected = errors.filter(e => e.corrected).length;
+    const pending = total - removed - corrected;
+    
+    const statsText = document.getElementById('errorStatsText');
+    if (statsText) {
+      statsText.innerHTML = `
+        <strong>Total:</strong> ${total} | 
+        <strong>Pendientes:</strong> ${pending} | 
+        <strong>Corregidos:</strong> ${corrected} | 
+        <strong>Eliminados:</strong> ${removed}
+      `;
+    }
+  }
+
+  function editErrorRow(errorIndex) {
+    if (currentErrors[errorIndex]) {
+      currentErrors[errorIndex].isEditing = true;
+      // Crear copia de seguridad de los datos originales
+      currentErrors[errorIndex].originalData = { ...currentErrors[errorIndex].data };
+      populateErrorsModal(currentErrors);
+    }
+  }
+
+  function saveErrorRow(errorIndex) {
+    if (currentErrors[errorIndex]) {
+      currentErrors[errorIndex].isEditing = false;
+      currentErrors[errorIndex].corrected = true;
+      // Eliminar copia de seguridad ya que se guardaron los cambios
+      delete currentErrors[errorIndex].originalData;
+      populateErrorsModal(currentErrors);
+    }
+  }
+
+  function cancelEditErrorRow(errorIndex) {
+    if (currentErrors[errorIndex]) {
+      // Restaurar datos originales si existían
+      if (currentErrors[errorIndex].originalData) {
+        currentErrors[errorIndex].data = { ...currentErrors[errorIndex].originalData };
+        delete currentErrors[errorIndex].originalData;
+      }
+      currentErrors[errorIndex].isEditing = false;
+      populateErrorsModal(currentErrors);
+    }
+  }
+
+  function updateErrorData(errorIndex, field, value) {
+    if (currentErrors[errorIndex] && currentErrors[errorIndex].data) {
+      currentErrors[errorIndex].data[field] = value;
+    }
+  }
+
+  function formatErrorData(data) {
+    if (!data) return '<em class="text-muted">No hay datos disponibles</em>';
+    
+    try {
+      const displayFields = [
+        { key: 'category_code', label: 'Categoría' },
+        { key: 'rental_location_name', label: 'Sucursal' },
+        { key: 'rate_type_name', label: 'Tipo tarifa' },
+        { key: 'season_name', label: 'Temporada' },
+        { key: 'time_measurement', label: 'Unidad' },
+        { key: 'units', label: 'Cantidad' },
+        { key: 'price', label: 'Precio' }
+      ];
+      
+      const formatted = displayFields
+        .filter(field => data[field.key] && data[field.key] !== '')
+        .map(field => `<strong>${field.label}:</strong> ${data[field.key]}`)
+        .join('<br>');
+      
+      return formatted || '<em class="text-muted">Datos no disponibles</em>';
+    } catch (error) {
+      console.error('Error formatting error data:', error);
+      return '<em class="text-danger">Error al formatear datos</em>';
+    }
+  }
+
+  function generateErrorSuggestion(error) {
+    // Si el error ya tiene sugerencias del backend, usarlas
+    if (error.suggestions && error.suggestions.length > 0) {
+      return error.suggestions.map(s => `• ${s}`).join('<br>');
+    }
+    
+    const errorText = (error.error || error.message || '').toLowerCase();
+    const data = error.data || {};
+    
+    if (errorText.includes('definición de precio') || errorText.includes('no se encontró')) {
+      const suggestions = [
+        `<strong>💡 Alternativas disponibles:</strong>`,
+        `• Cambiar categoría <strong>'${data.category_code || 'N/A'}'</strong> por: A, B, o C`,
+        `• Verificar que <strong>'${data.rental_location_name || 'N/A'}'</strong> sea: Barcelona, Madrid, Valencia, Menorca`,
+        `• Confirmar tipo tarifa <strong>'${data.rate_type_name || 'N/A'}'</strong> sea: Estándar, Premium`,
+        `<strong>🔧 O solicitar configuración:</strong>`,
+        `• Pedir al administrador crear la definición de precio para esta combinación`,
+        `• Configurar CategoryRentalLocationRateType para ${data.category_code || 'N/A'}/${data.rental_location_name || 'N/A'}/${data.rate_type_name || 'N/A'}`
+      ];
+      
+      if (data.season_name) {
+        suggestions.splice(4, 0, `• Verificar temporada <strong>'${data.season_name}'</strong> sea válida`);
+      }
+      
+      return suggestions.join('<br>');
+      
+    } else if (errorText.includes('temporada')) {
+      return [
+        `• Verificar que la temporada <strong>'${data.season_name || 'N/A'}'</strong> existe`,
+        `• Temporadas típicas: Alta, Media, Baja`,
+        `• Dejar vacío si no usa temporadas`,
+        `• Comprobar si la categoría <strong>'${data.category_code || 'N/A'}'</strong> requiere temporadas`
+      ].join('<br>');
+      
+    } else if (errorText.includes('unidades')) {
+      return [
+        `• Las unidades <strong>${data.units || 'N/A'}</strong> no están permitidas para categoría <strong>'${data.category_code || 'N/A'}'</strong>`,
+        `• Valores válidos típicos: 1, 2, 4, 7, 15 días`,
+        `• Para categoría A: solo 1, 2, 4, 15 días permitidos`,
+        `• Cambiar ${data.units || 'N/A'} por un valor permitido`
+      ].join('<br>');
+      
+    } else if (errorText.includes('precio')) {
+      return [
+        `• Verificar que el precio <strong>'${data.price || 'N/A'}'</strong> sea un número válido`,
+        `• El precio debe ser mayor a 0`,
+        `• Usar punto decimal (.) en lugar de coma (,)`,
+        `• Ejemplo: 25.50 en lugar de 25,50`
+      ].join('<br>');
+      
+    } else {
+      return [
+        `• Revisar los datos de la línea ${error.line || 'N/A'}`,
+        `• Verificar formato general del archivo CSV`,
+        `• Consultar documentación de campos requeridos`,
+        `• Contactar soporte técnico si el problema persiste`
+      ].join('<br>');
+    }
+  }
+
+  function removeErrorRow(errorIndex) {
+    if (confirm('¿Eliminar esta fila del procesamiento?')) {
+      if (currentErrors[errorIndex]) {
+        currentErrors[errorIndex].removed = true;
+        currentErrors[errorIndex].isEditing = false;
+        populateErrorsModal(currentErrors);
+      }
+    }
+  }
+
+  async function retryImportWithCorrectedData() {
+    // Verificar que hay correcciones para procesar
+    const correctedErrors = currentErrors.filter(error => error.corrected && !error.removed);
+    const removedErrors = currentErrors.filter(error => error.removed);
+    
+    if (correctedErrors.length === 0 && removedErrors.length === 0) {
+      alert('No hay cambios para procesar. Realiza correcciones o elimina filas primero.');
+      return;
+    }
+    
+    const modal = bootstrap.Modal.getInstance(document.getElementById('errorsModal'));
+    modal.hide();
+    
+    showLoading('🔄 Procesando datos corregidos...');
+    
+    try {
+      // Preparar datos corregidos para el backend
+      const correctedData = currentErrors
+        .filter(error => !error.removed)
+        .map(error => ({
+          line: error.line,
+          data: error.data,
+          corrected: error.corrected || false
+        }));
+      
+      const response = await fetch('/admin/import/corrected', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          corrected_rows: correctedData,
+          original_file_info: {
+            name: document.getElementById('csv_file').files[0]?.name || 'unknown.csv',
+            timestamp: new Date().toISOString()
+          }
+        })
+      });
+
+      const result = await response.json();
+      hideLoading();
+
+      if (result.success) {
+        showImportSuccess(result);
+      } else {
+        showImportError(result);
+      }
+    } catch (error) {
+      hideLoading();
+      showError('Error de conexión', error.message);
+    }
+  }
+
+  async function retryImportWithoutErrors() {
+    const modal = bootstrap.Modal.getInstance(document.getElementById('errorsModal'));
+    modal.hide();
+    
+    // Filtrar errores que no han sido eliminados
+    const activeErrors = currentErrors.filter(error => !error.removed);
+    
+    if (activeErrors.length === 0) {
+      alert('No hay errores para procesar. Intenta reimportar el archivo completo.');
+      return;
+    }
+    
+    showLoading('🔄 Reintentando importación sin errores...');
+    
+    try {
+      const response = await fetch('/admin/import/retry', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          excluded_errors: currentErrors.map((error, index) => ({
+            index,
+            removed: error.removed || false,
+            line: error.line
+          }))
+        })
+      });
+
+      const result = await response.json();
+      hideLoading();
+
+      if (result.success) {
+        showImportSuccess(result);
+      } else {
+        showImportError(result);
+      }
+    } catch (error) {
+      hideLoading();
+      showError('Error de conexión', error.message);
+    }
+  }
+
+  function downloadCorrectedCsv() {
+    // Incluir tanto filas corregidas como filas sin errores (si las hubiera)
+    const validRows = currentErrors
+      .filter(error => !error.removed && error.data)
+      .map(error => error.data);
+    
+    if (validRows.length === 0) {
+      alert('No hay datos válidos para descargar');
+      return;
+    }
+    
+    // Generar CSV con todas las columnas estándar
+    const headers = [
+      'category_code', 'rental_location_name', 'rate_type_name', 'season_name',
+      'time_measurement', 'units', 'price', 'included_km', 'extra_km_price'
+    ];
+    
+    const csvContent = [
+      headers.join(','),
+      ...validRows.map(row => 
+        headers.map(header => 
+          `"${(row[header] || '').toString().replace(/"/g, '""')}"`
+        ).join(',')
+      )
+    ].join('\n');
+    
+    // Descargar archivo
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.setAttribute('href', url);
+    link.setAttribute('download', `corrected_prices_${new Date().getTime()}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    
+    // Mostrar mensaje de confirmación
+    const correctedCount = currentErrors.filter(e => e.corrected && !e.removed).length;
+    const totalCount = validRows.length;
+    alert(`CSV descargado con ${totalCount} filas (${correctedCount} corregidas)`);
+  }
+</script>

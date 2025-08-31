@@ -1,2 +1,52 @@
-<h1>Home page</h1>
-<p><%= @message %></p>
+<div class="container mt-4">
+  <div class="row">
+    <div class="col-12">
+      <h1>🏠 Mybooking - Prueba Técnica</h1>
+      <p class="lead"><%= @message %></p>
+      
+      <div class="row mt-4">
+        <div class="col-md-6">
+          <div class="card h-100">
+            <div class="card-header">
+              <h5>📊 Gestión de Precios</h5>
+            </div>
+            <div class="card-body d-flex flex-column">
+              <p class="flex-grow-1">Sistema de filtros cascada para visualización de precios por categoría, sucursal y temporada.</p>
+              <a href="/pricing" class="btn btn-primary">Ver Precios</a>
+            </div>
+          </div>
+        </div>
+        
+        <div class="col-md-6">
+          <div class="card h-100">
+            <div class="card-header">
+              <h5>🔄 Importación Masiva</h5>
+            </div>
+            <div class="card-body d-flex flex-column">
+              <p class="flex-grow-1">Importa precios masivamente desde archivos CSV con validaciones robustas.</p>
+              <a href="/admin/import" class="btn btn-success">Importar CSV</a>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <div class="row mt-4">
+        <div class="col-12">
+          <div class="card">
+            <div class="card-header">
+              <h5>🔗 APIs Disponibles</h5>
+            </div>
+            <div class="card-body">
+              <ul>
+                <li><code>GET /api/sample</code> - Ejemplo de endpoint REST</li>
+                <li><code>GET /api/sample-service</code> - Ejemplo con servicio SQL</li>
+                <li><code>POST /admin/import</code> - Importación de precios vía API</li>
+                <li><code>POST /admin/import/preview</code> - Vista previa de importación</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>

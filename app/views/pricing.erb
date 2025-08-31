@@ -1,0 +1,556 @@
+<div class="container mt-4">
+  <div class="row">
+    <div class="col-12">
+      <h1>💰 Consulta de Precios</h1>
+      <p class="text-muted">Consulta precios por categoría, sucursal y temporada</p>
+      
+      <style>
+        .table th {
+          border-top: 2px solid #dee2e6;
+          font-weight: 600;
+          text-align: center;
+          vertical-align: middle;
+        }
+        .table td {
+          vertical-align: middle;
+        }
+        .badge {
+          font-weight: 600;
+        }
+        .price-cell {
+          font-size: 1.1em;
+          font-weight: 600;
+        }
+        .table-hover tbody tr:hover {
+          background-color: #f8f9fa;
+        }
+        .table-striped tbody tr:nth-of-type(odd) {
+          background-color: rgba(0,0,0,.02);
+        }
+        #prices_table {
+          box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+          border-radius: 0.375rem;
+          overflow: hidden;
+        }
+        .thead-dark th {
+          background: linear-gradient(135deg, #343a40 0%, #495057 100%);
+          border: none;
+          color: white;
+        }
+      </style>
+      
+      <!-- Filtros en cascada -->
+      <div class="card mb-4">
+        <div class="card-header">
+          <h5>🔍 Filtros</h5>
+        </div>
+        <div class="card-body">
+          <form class="row g-3">
+            <!-- Sucursal (Primera selección - habilita todo lo demás) -->
+            <div class="col-md-2">
+              <label for="rentalLocationSelect" class="form-label">Sucursal</label>
+              <select class="form-select" id="rentalLocationSelect" onchange="onRentalLocationChange()">
+                <option value="">Seleccione una sucursal</option>
+              </select>
+            </div>
+            
+            <!-- Tipo de Tarifa (Se habilita cuando se selecciona sucursal) -->
+            <div class="col-md-2">
+              <label for="rateTypeSelect" class="form-label">Tipo de tarifa</label>
+              <select class="form-select" id="rateTypeSelect" disabled onchange="onRateTypeChange()">
+                <option value="">Seleccione un tipo de tarifa</option>
+              </select>
+            </div>
+            
+            <!-- Conjunto de Temporadas (Se habilita cuando se selecciona tipo tarifa) -->
+            <div class="col-md-3">
+              <label for="seasonDefinitionSelect" class="form-label">Grupo de temporadas</label>
+              <select class="form-select" id="seasonDefinitionSelect" disabled onchange="onSeasonDefinitionChange()">
+                <option value="">Tarifas sin temporadas</option>
+              </select>
+            </div>
+            
+            <!-- Temporada específica (Se habilita cuando se selecciona conjunto) -->
+            <div class="col-md-2">
+              <label for="seasonSelect" class="form-label">Temporada</label>
+              <select class="form-select" id="seasonSelect" disabled onchange="loadPrices()">
+                <option value="">Seleccione la temporada</option>
+              </select>
+            </div>
+            
+            <!-- Unidad de tiempo -->
+            <div class="col-md-2">
+              <label for="timeMeasurementSelect" class="form-label">Duración</label>
+              <select class="form-select" id="timeMeasurementSelect" onchange="loadPrices()">
+                <option value="">Seleccione la unidad</option>
+                <option value="1">Meses</option>
+                <option value="2" selected>Días</option>
+                <option value="3">Horas</option>
+                <option value="4">Minutos</option>
+              </select>
+            </div>
+            
+            <div class="col-md-1">
+              <button type="button" class="btn btn-primary w-100" onclick="loadPrices()" id="searchButton" disabled style="margin-top: 32px;">
+                Filtrar
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      <hr>
+
+      <!-- Tabla con las tarifas -->
+      <div id="resultsPanel" style="display: none;">
+        <div class="container">
+          <div class="row">
+            <div class="col-12">
+              <div class="table-responsive">
+                <table id="prices_table" class="table table-hover table-striped">
+                  <thead class="table-dark">
+                    <tr>
+                      <th scope="col" class="text-start" style="min-width: 250px;">
+                        <i class="fas fa-car me-2"></i>Categoría
+                      </th>
+                      <th scope="col" class="text-end" id="header-1" style="min-width: 100px;">1</th>
+                      <th scope="col" class="text-end" id="header-2" style="min-width: 100px;">2</th>
+                      <th scope="col" class="text-end" id="header-4" style="min-width: 100px;">4</th>
+                      <th scope="col" class="text-end" id="header-8" style="min-width: 100px;">8</th>
+                      <th scope="col" class="text-end" id="header-15" style="min-width: 100px;">15</th>
+                      <th scope="col" class="text-end" id="header-30" style="min-width: 100px;">30</th>
+                      <th scope="col" class="text-center" style="min-width: 120px;">
+                        <i class="fas fa-shield-alt me-2"></i>Franquicia
+                      </th>
+                      <th scope="col" class="text-center" style="min-width: 120px;">
+                        <i class="fas fa-piggy-bank me-2"></i>Fianza
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody id="prices_table_body">
+                    <!-- Los precios se cargarán aquí dinámicamente -->
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Loader -->
+      <div id="loadingPanel" style="display: none;">
+        <div class="container">
+          <div class="row">
+            <div class="col-12 text-center">
+              <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Cargando...</span>
+              </div>
+              <p class="mt-2">Cargando datos...</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Error Panel -->
+      <div id="errorPanel" style="display: none;">
+        <div class="container">
+          <div class="row">
+            <div class="col-12">
+              <div class="alert alert-danger" id="errorMessage"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script>
+// Variables globales para manejar estado
+let currentFilters = {
+  rental_location_id: null,
+  rate_type_id: null,
+  season_definition_id: null,
+  season_id: null,
+  time_measurement: null
+};
+
+// Cargar sucursales al inicializar la página
+document.addEventListener('DOMContentLoaded', function() {
+  loadRentalLocations();
+});
+
+async function loadRentalLocations() {
+  try {
+    const response = await fetch('/api/pricing/rental-locations');
+    const result = await response.json();
+    
+    if (result.success) {
+      const select = document.getElementById('rentalLocationSelect');
+      select.innerHTML = '<option value="">Seleccione una sucursal</option>';
+      
+      result.data.forEach(location => {
+        const option = document.createElement('option');
+        option.value = location.id;
+        option.textContent = location.name;
+        select.appendChild(option);
+      });
+    }
+  } catch (error) {
+    console.error('Error loading rental locations:', error);
+    showError('Error cargando sucursales');
+  }
+}
+
+async function onRentalLocationChange() {
+  const locationId = document.getElementById('rentalLocationSelect').value;
+  currentFilters.rental_location_id = locationId;
+  
+  // Resetear filtros dependientes
+  resetDependentFilters(['rateType', 'seasonDefinition', 'season']);
+  
+  if (locationId) {
+    // Habilitar tipo de tarifa y cargar opciones
+    document.getElementById('rateTypeSelect').disabled = false;
+    await loadRateTypes(locationId);
+    updateSearchButton();
+  } else {
+    // Deshabilitar todos los filtros dependientes
+    disableDependentFilters(['rateType', 'seasonDefinition', 'season']);
+    updateSearchButton();
+  }
+}
+
+async function loadRateTypes(locationId) {
+  try {
+    const response = await fetch(`/api/pricing/rate-types?rental_location_id=${locationId}`);
+    const result = await response.json();
+    
+    if (result.success) {
+      const select = document.getElementById('rateTypeSelect');
+      select.innerHTML = '<option value="">Seleccione un tipo de tarifa</option>';
+      
+      result.data.forEach(rateType => {
+        const option = document.createElement('option');
+        option.value = rateType.id;
+        option.textContent = rateType.name;
+        select.appendChild(option);
+      });
+    }
+  } catch (error) {
+    console.error('Error loading rate types:', error);
+    showError('Error cargando tipos de tarifa');
+  }
+}
+
+async function onRateTypeChange() {
+  const rateTypeId = document.getElementById('rateTypeSelect').value;
+  currentFilters.rate_type_id = rateTypeId;
+  
+  // Resetear filtros dependientes
+  resetDependentFilters(['seasonDefinition', 'season']);
+  
+  if (rateTypeId && currentFilters.rental_location_id) {
+    // Habilitar conjunto de temporadas y cargar opciones
+    document.getElementById('seasonDefinitionSelect').disabled = false;
+    await loadSeasonDefinitions(currentFilters.rental_location_id, rateTypeId);
+    updateSearchButton();
+  } else {
+    disableDependentFilters(['seasonDefinition', 'season']);
+    updateSearchButton();
+  }
+}
+
+async function loadSeasonDefinitions(locationId, rateTypeId) {
+  try {
+    const response = await fetch(`/api/pricing/season-definitions?rental_location_id=${locationId}&rate_type_id=${rateTypeId}`);
+    const result = await response.json();
+    
+    if (result.success) {
+      const select = document.getElementById('seasonDefinitionSelect');
+      select.innerHTML = '<option value="">Tarifas sin temporadas</option>';
+      
+      result.data.forEach(seasonDef => {
+        const option = document.createElement('option');
+        option.value = seasonDef.id || 'null';
+        option.textContent = seasonDef.name;
+        select.appendChild(option);
+      });
+    }
+  } catch (error) {
+    console.error('Error loading season definitions:', error);
+    showError('Error cargando conjuntos de temporadas');
+  }
+}
+
+async function onSeasonDefinitionChange() {
+  const seasonDefinitionId = document.getElementById('seasonDefinitionSelect').value;
+  currentFilters.season_definition_id = seasonDefinitionId;
+  
+  // Resetear temporada específica
+  resetDependentFilters(['season']);
+  
+  if (seasonDefinitionId && seasonDefinitionId !== 'null') {
+    // Habilitar temporadas específicas y cargar opciones
+    document.getElementById('seasonSelect').disabled = false;
+    await loadSeasons(seasonDefinitionId);
+  } else {
+    disableDependentFilters(['season']);
+  }
+  updateSearchButton();
+}
+
+async function loadSeasons(seasonDefinitionId) {
+  try {
+    const response = await fetch(`/api/pricing/seasons?season_definition_id=${seasonDefinitionId}`);
+    const result = await response.json();
+    
+    if (result.success) {
+      const select = document.getElementById('seasonSelect');
+      select.innerHTML = '<option value="">Seleccione la temporada</option>';
+      
+      result.data.forEach(season => {
+        const option = document.createElement('option');
+        option.value = season.id || 'null';
+        option.textContent = season.name;
+        select.appendChild(option);
+      });
+    }
+  } catch (error) {
+    console.error('Error loading seasons:', error);
+    showError('Error cargando temporadas');
+  }
+}
+
+async function loadPrices() {
+  // Validar que tenemos los filtros mínimos
+  if (!currentFilters.rental_location_id || !currentFilters.rate_type_id) {
+    showError('Por favor selecciona Sucursal y Tipo de Tarifa');
+    return;
+  }
+  
+  const timeUnit = document.getElementById('timeMeasurementSelect').value;
+  if (!timeUnit) {
+    showError('Por favor selecciona una unidad de duración');
+    return;
+  }
+  
+  showLoading();
+  
+  // Construir query string
+  const params = new URLSearchParams();
+  params.append('rental_location_id', currentFilters.rental_location_id);
+  params.append('rate_type_id', currentFilters.rate_type_id);
+  params.append('time_measurement', timeUnit);
+  
+  const seasonDefinitionId = document.getElementById('seasonDefinitionSelect').value;
+  const seasonId = document.getElementById('seasonSelect').value;
+  
+  if (seasonDefinitionId) {
+    params.append('season_definition_id', seasonDefinitionId);
+  }
+  
+  if (seasonId) {
+    params.append('season_id', seasonId);
+  }
+  
+  try {
+    const response = await fetch(`/api/pricing/prices?${params.toString()}`);
+    const result = await response.json();
+    
+    if (result.success) {
+      showPricesTable(result.data, timeUnit);
+    } else {
+      showError(result.error || 'Error cargando precios');
+    }
+  } catch (error) {
+    console.error('Error loading prices:', error);
+    showError('Error de conexión');
+  } finally {
+    hideLoading();
+  }
+}
+
+function showPricesTable(categories, timeUnit) {
+  const tableBody = document.getElementById('prices_table_body');
+  
+  // Actualizar headers de la tabla con la unidad
+  updateTableHeaders(timeUnit);
+  
+  if (categories.length === 0) {
+    tableBody.innerHTML = `
+      <tr>
+        <td colspan="9" class="text-center text-muted py-4">
+          <i class="fas fa-search fa-2x mb-2 text-muted"></i><br>
+          No se encontraron precios para los filtros seleccionados
+        </td>
+      </tr>
+    `;
+  } else {
+    let html = '';
+    
+    categories.forEach(category => {
+      // Crear mapa de precios por unidades
+      const priceMap = {};
+      category.prices.forEach(price => {
+        if (!priceMap[price.units]) {
+          priceMap[price.units] = [];
+        }
+        priceMap[price.units].push(price);
+      });
+      
+      // Encontrar el mejor precio para cada unidad (el más bajo)
+      const bestPrices = {};
+      Object.keys(priceMap).forEach(units => {
+        const prices = priceMap[units];
+        bestPrices[units] = prices.reduce((min, current) => 
+          current.price < min.price ? current : min
+        );
+      });
+      
+      // Obtener información de franquicia y depósito (del primer precio disponible)
+      const firstPrice = category.prices[0];
+      const excess = firstPrice ? firstPrice.excess_formatted : "€0";
+      const deposit = firstPrice ? firstPrice.deposit_formatted : "€0";
+      
+      html += `
+        <tr class="align-middle">
+          <td class="text-start">
+            <div class="d-flex align-items-center">
+              <span class="badge bg-primary me-2" style="font-size: 0.9em;">${category.category_code}</span>
+              <div>
+                <strong>${category.category_name}</strong>
+                ${bestPrices[1] ? `<br><small class="text-muted">${bestPrices[1].season_name}</small>` : ''}
+              </div>
+            </div>
+          </td>
+          <td class="text-end price-cell">${formatPrice(bestPrices[1])}</td>
+          <td class="text-end price-cell">${formatPrice(bestPrices[2])}</td>
+          <td class="text-end price-cell">${formatPrice(bestPrices[4])}</td>
+          <td class="text-end price-cell">${formatPrice(bestPrices[8])}</td>
+          <td class="text-end price-cell">${formatPrice(bestPrices[15])}</td>
+          <td class="text-end price-cell">${formatPrice(bestPrices[30])}</td>
+          <td class="text-center">
+            <span class="badge bg-warning text-dark">${excess}</span>
+          </td>
+          <td class="text-center">
+            <span class="badge bg-info text-dark">${deposit}</span>
+          </td>
+        </tr>
+      `;
+    });
+    
+    tableBody.innerHTML = html;
+  }
+  
+  showResults();
+}
+
+function formatPrice(priceObj) {
+  if (!priceObj) {
+    return '<span class="text-muted"><i class="fas fa-minus"></i></span>';
+  }
+  
+  const price = priceObj.price.toFixed(0);
+  return `<span class="text-success"><i class="fas fa-euro-sign me-1"></i>${price}</span>`;
+}
+
+function updateTableHeaders(timeUnit) {
+  const unitLabels = {
+    '1': 'meses',
+    '2': 'días', 
+    '3': 'horas',
+    '4': 'minutos'
+  };
+  
+  const label = unitLabels[timeUnit] || timeUnit;
+  const icon = timeUnit === '2' ? 'fa-calendar-day' : 
+               timeUnit === '3' ? 'fa-clock' : 
+               timeUnit === '4' ? 'fa-stopwatch' : 'fa-calendar';
+  
+  document.getElementById('header-1').innerHTML = `<i class="fas ${icon} me-1"></i>1<br><small>${label}</small>`;
+  document.getElementById('header-2').innerHTML = `<i class="fas ${icon} me-1"></i>2<br><small>${label}</small>`;
+  document.getElementById('header-4').innerHTML = `<i class="fas ${icon} me-1"></i>4<br><small>${label}</small>`;
+  document.getElementById('header-8').innerHTML = `<i class="fas ${icon} me-1"></i>8<br><small>${label}</small>`;
+  document.getElementById('header-15').innerHTML = `<i class="fas ${icon} me-1"></i>15<br><small>${label}</small>`;
+  document.getElementById('header-30').innerHTML = `<i class="fas ${icon} me-1"></i>30<br><small>${label}</small>`;
+}
+
+function resetDependentFilters(filters) {
+  const filterMap = {
+    rateType: 'rateTypeSelect',
+    seasonDefinition: 'seasonDefinitionSelect', 
+    season: 'seasonSelect'
+  };
+  
+  filters.forEach(filter => {
+    const selectId = filterMap[filter];
+    if (selectId) {
+      const select = document.getElementById(selectId);
+      if (filter === 'seasonDefinition') {
+        select.innerHTML = '<option value="">Tarifas sin temporadas</option>';
+      } else {
+        select.innerHTML = '<option value="">Seleccione...</option>';
+      }
+      select.value = '';
+    }
+  });
+  
+  // Resetear variables globales
+  if (filters.includes('rateType')) currentFilters.rate_type_id = null;
+  if (filters.includes('seasonDefinition')) currentFilters.season_definition_id = null;
+  if (filters.includes('season')) currentFilters.season_id = null;
+}
+
+function disableDependentFilters(filters) {
+  const filterMap = {
+    rateType: 'rateTypeSelect',
+    seasonDefinition: 'seasonDefinitionSelect',
+    season: 'seasonSelect'
+  };
+  
+  filters.forEach(filter => {
+    const selectId = filterMap[filter];
+    if (selectId) {
+      document.getElementById(selectId).disabled = true;
+    }
+  });
+}
+
+function updateSearchButton() {
+  const button = document.getElementById('searchButton');
+  const hasMinimumFilters = currentFilters.rental_location_id && currentFilters.rate_type_id;
+  button.disabled = !hasMinimumFilters;
+}
+
+function showError(message) {
+  document.getElementById('errorMessage').textContent = message;
+  document.getElementById('errorPanel').style.display = 'block';
+  hideResults();
+  hideLoading();
+}
+
+function showLoading() {
+  document.getElementById('loadingPanel').style.display = 'block';
+  hideResults();
+  hideError();
+}
+
+function hideLoading() {
+  document.getElementById('loadingPanel').style.display = 'none';
+}
+
+function showResults() {
+  document.getElementById('resultsPanel').style.display = 'block';
+  hideError();
+}
+
+function hideResults() {
+  document.getElementById('resultsPanel').style.display = 'none';
+}
+
+function hideError() {
+  document.getElementById('errorPanel').style.display = 'none';
+}
+</script>
