@@ -147,7 +147,8 @@ module Controller
             }.to_json
           end
           
-          # Obtener price definitions para la ubicación y tipo de tarifa
+          # Obtener ALL price definitions para la ubicación y tipo de tarifa
+          # No filtrar por season_definition aquí - mostrar todas las disponibles
           price_definition_links = Repository::CategoryRentalLocationRateTypeRepository.new.find_all(
             rental_location_id: location_id.to_i,
             rate_type_id: rate_type_id.to_i
@@ -156,6 +157,7 @@ module Controller
           season_definitions_set = Set.new
           has_no_season = false
           
+          # Recopilar todas las definiciones de temporada disponibles
           price_definition_links.each do |link|
             price_definition = Repository::PriceDefinitionRepository.new.first(id: link.price_definition_id)
             
@@ -268,12 +270,22 @@ module Controller
             price_definition = Repository::PriceDefinitionRepository.new.first(id: link.price_definition_id)
             category = Repository::CategoryRepository.new.first(id: link.category_id)
             
-            # Filtrar por definición de temporada si se especifica
+            # Filtrar por definición de temporada SOLO cuando se especifica
+            # Según la tarea: "se cargarán aquellas categorías con precios sin temporadas" cuando se selecciona "sin temporadas"
+            # Y se cargarán las categorías correspondientes cuando se selecciona una temporada específica
+            
             if season_definition_id && season_definition_id != "null" && !season_definition_id.empty?
-              next if price_definition.season_definition_id.to_s != season_definition_id
+              # Se ha seleccionado una definición de temporada específica
+              if price_definition.season_definition_id.to_s != season_definition_id
+                next
+              end
             elsif season_definition_id == "null"
-              next unless price_definition.season_definition_id.nil?
+              # Se ha seleccionado "Sin temporadas" - mostrar solo categorías sin definición de temporada
+              unless price_definition.season_definition_id.nil?
+                next
+              end
             end
+            # Si no se especifica season_definition_id, mostrar todas las categorías disponibles para location+rate_type
             
             # Obtener precios para esta definición
             all_prices = Repository::PriceRepository.new.find_all(
