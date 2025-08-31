@@ -385,9 +385,31 @@
     document.getElementById('resultsPanel').style.display = 'none';
   }
 
-  // Variables globales para manejar errores
+  // Variables globales para manejar errores y opciones válidas
   let currentErrors = [];
   let processedRows = [];
+  let validOptions = null;
+
+  // Cargar opciones válidas al inicializar la página
+  async function loadValidOptions() {
+    try {
+      const response = await fetch('/admin/import/options');
+      const result = await response.json();
+      if (result.success) {
+        validOptions = result.data;
+        console.log('Opciones válidas cargadas:', validOptions);
+      } else {
+        console.error('Error obteniendo opciones válidas:', result.message);
+      }
+    } catch (error) {
+      console.error('Error cargando opciones válidas:', error);
+    }
+  }
+
+  // Inicializar opciones al cargar la página
+  document.addEventListener('DOMContentLoaded', function() {
+    loadValidOptions();
+  });
 
   function translateErrorType(errorType) {
     const errorTranslations = {
@@ -450,6 +472,15 @@
 
   function showDetailedErrors(errors) {
     try {
+      // Asegurar que las opciones válidas estén cargadas
+      if (!validOptions) {
+        console.warn('Opciones válidas no cargadas, recargando...');
+        loadValidOptions().then(() => {
+          showDetailedErrors(errors); // Reintentar después de cargar
+        });
+        return;
+      }
+      
       currentErrors = errors; // errors ya es un array de objetos
       populateErrorsModal(currentErrors);
       
@@ -510,62 +541,25 @@
     const errorMessage = error.error || error.message || 'Error desconocido';
     
     if (isEditing) {
+      const categoryOptions = generateCategoryOptions(data.category_code, index);
+      const locationOptions = generateLocationOptions(data.rental_location_name, index);
+      const rateTypeOptions = generateRateTypeOptions(data.rate_type_name, index);
+      const seasonOptions = generateSeasonOptions(data.season_name, data.category_code, index);
+      const unitsOptions = generateUnitsOptions(data.units, data.category_code, index);
+      
       return `
         <td><span class="badge bg-warning">${lineNumber}</span></td>
-        <td>
-          <select class="form-select form-select-sm" onchange="updateErrorData(${index}, 'category_code', this.value)">
-            <option value="">Seleccionar...</option>
-            <option value="A" ${data.category_code === 'A' ? 'selected' : ''}>A - Categoría A</option>
-            <option value="B" ${data.category_code === 'B' ? 'selected' : ''}>B - Categoría B</option>
-            <option value="C" ${data.category_code === 'C' ? 'selected' : ''}>C - Categoría C</option>
-            <option value="${data.category_code}" ${!['A', 'B', 'C'].includes(data.category_code) ? 'selected' : ''}>${data.category_code || 'Personalizado'}</option>
-          </select>
-        </td>
-        <td>
-          <select class="form-select form-select-sm" onchange="updateErrorData(${index}, 'rental_location_name', this.value)">
-            <option value="">Seleccionar...</option>
-            <option value="Barcelona" ${data.rental_location_name === 'Barcelona' ? 'selected' : ''}>Barcelona</option>
-            <option value="Madrid" ${data.rental_location_name === 'Madrid' ? 'selected' : ''}>Madrid</option>
-            <option value="Valencia" ${data.rental_location_name === 'Valencia' ? 'selected' : ''}>Valencia</option>
-            <option value="Menorca" ${data.rental_location_name === 'Menorca' ? 'selected' : ''}>Menorca</option>
-            <option value="${data.rental_location_name}" ${!['Barcelona', 'Madrid', 'Valencia', 'Menorca'].includes(data.rental_location_name) ? 'selected' : ''}>${data.rental_location_name || 'Personalizado'}</option>
-          </select>
-        </td>
-        <td>
-          <select class="form-select form-select-sm" onchange="updateErrorData(${index}, 'rate_type_name', this.value)">
-            <option value="">Seleccionar...</option>
-            <option value="Estándar" ${data.rate_type_name === 'Estándar' ? 'selected' : ''}>Estándar</option>
-            <option value="Premium" ${data.rate_type_name === 'Premium' ? 'selected' : ''}>Premium</option>
-            <option value="${data.rate_type_name}" ${!['Estándar', 'Premium'].includes(data.rate_type_name) ? 'selected' : ''}>${data.rate_type_name || 'Personalizado'}</option>
-          </select>
-        </td>
-        <td>
-          <select class="form-select form-select-sm" onchange="updateErrorData(${index}, 'season_name', this.value)">
-            <option value="">Sin temporada</option>
-            <option value="Alta" ${data.season_name === 'Alta' ? 'selected' : ''}>Alta</option>
-            <option value="Media" ${data.season_name === 'Media' ? 'selected' : ''}>Media</option>
-            <option value="Baja" ${data.season_name === 'Baja' ? 'selected' : ''}>Baja</option>
-            <option value="${data.season_name}" ${!['', 'Alta', 'Media', 'Baja'].includes(data.season_name) ? 'selected' : ''}>${data.season_name || 'Personalizado'}</option>
-          </select>
-        </td>
+        <td>${categoryOptions}</td>
+        <td>${locationOptions}</td>
+        <td>${rateTypeOptions}</td>
+        <td>${seasonOptions}</td>
         <td><select class="form-select form-select-sm" onchange="updateErrorData(${index}, 'time_measurement', this.value)">
               <option value="days" ${data.time_measurement === 'days' ? 'selected' : ''}>days</option>
               <option value="hours" ${data.time_measurement === 'hours' ? 'selected' : ''}>hours</option>
               <option value="minutes" ${data.time_measurement === 'minutes' ? 'selected' : ''}>minutes</option>
               <option value="months" ${data.time_measurement === 'months' ? 'selected' : ''}>months</option>
             </select></td>
-        <td>
-          <select class="form-select form-select-sm" onchange="updateErrorData(${index}, 'units', this.value)">
-            <option value="">Seleccionar...</option>
-            <option value="1" ${data.units == '1' ? 'selected' : ''}>1</option>
-            <option value="2" ${data.units == '2' ? 'selected' : ''}>2</option>
-            <option value="4" ${data.units == '4' ? 'selected' : ''}>4</option>
-            <option value="7" ${data.units == '7' ? 'selected' : ''}>7</option>
-            <option value="15" ${data.units == '15' ? 'selected' : ''}>15</option>
-            <option value="30" ${data.units == '30' ? 'selected' : ''}>30</option>
-            <option value="${data.units}" ${!['1', '2', '4', '7', '15', '30'].includes(data.units) ? 'selected' : ''}>${data.units || 'Personalizado'}</option>
-          </select>
-        </td>
+        <td>${unitsOptions}</td>
         <td><input type="number" class="form-control form-control-sm" value="${data.price || ''}" 
                    onchange="updateErrorData(${index}, 'price', this.value)" placeholder="Precio" step="0.01" min="0"></td>
         <td>
@@ -909,5 +903,145 @@
     const correctedCount = currentErrors.filter(e => e.corrected && !e.removed).length;
     const totalCount = validRows.length;
     alert(`CSV descargado con ${totalCount} filas (${correctedCount} corregidas)`);
+  }
+
+  // Funciones para generar selectores dinámicos basados en datos reales de BD
+  function generateCategoryOptions(selectedValue, errorIndex) {
+    console.log('generateCategoryOptions called with:', selectedValue, errorIndex, 'validOptions:', !!validOptions);
+    
+    if (!validOptions || !validOptions.categories) {
+      console.log('No validOptions.categories available, using text input');
+      return `<input type="text" class="form-control form-control-sm" value="${selectedValue || ''}" 
+                     onchange="updateErrorData(${errorIndex}, 'category_code', this.value)" placeholder="Categoría">`;
+    }
+
+    console.log('Generating category select with options:', validOptions.categories);
+    let options = `<select class="form-select form-select-sm" onchange="updateErrorData(${errorIndex}, 'category_code', this.value)">`;
+    options += '<option value="">Seleccionar...</option>';
+    
+    validOptions.categories.forEach(category => {
+      const selected = category.code === selectedValue ? 'selected' : '';
+      options += `<option value="${category.code}" ${selected}>${category.code} - ${category.name}</option>`;
+    });
+    
+    // Agregar opción personalizada si el valor actual no está en la lista
+    if (selectedValue && !validOptions.categories.find(c => c.code === selectedValue)) {
+      options += `<option value="${selectedValue}" selected>${selectedValue} (No válido)</option>`;
+    }
+    
+    options += '</select>';
+    return options;
+  }
+
+  function generateLocationOptions(selectedValue, errorIndex) {
+    if (!validOptions || !validOptions.rental_locations) {
+      return `<input type="text" class="form-control form-control-sm" value="${selectedValue || ''}" 
+                     onchange="updateErrorData(${errorIndex}, 'rental_location_name', this.value)" placeholder="Sucursal">`;
+    }
+
+    let options = `<select class="form-select form-select-sm" onchange="updateErrorData(${errorIndex}, 'rental_location_name', this.value)">`;
+    options += '<option value="">Seleccionar...</option>';
+    
+    validOptions.rental_locations.forEach(location => {
+      const selected = location.name === selectedValue ? 'selected' : '';
+      options += `<option value="${location.name}" ${selected}>${location.name}</option>`;
+    });
+    
+    // Agregar opción personalizada si el valor actual no está en la lista
+    if (selectedValue && !validOptions.rental_locations.find(l => l.name === selectedValue)) {
+      options += `<option value="${selectedValue}" selected>${selectedValue} (No válido)</option>`;
+    }
+    
+    options += '</select>';
+    return options;
+  }
+
+  function generateRateTypeOptions(selectedValue, errorIndex) {
+    if (!validOptions || !validOptions.rate_types) {
+      return `<input type="text" class="form-control form-control-sm" value="${selectedValue || ''}" 
+                     onchange="updateErrorData(${errorIndex}, 'rate_type_name', this.value)" placeholder="Tipo tarifa">`;
+    }
+
+    let options = `<select class="form-select form-select-sm" onchange="updateErrorData(${errorIndex}, 'rate_type_name', this.value)">`;
+    options += '<option value="">Seleccionar...</option>';
+    
+    validOptions.rate_types.forEach(rateType => {
+      const selected = rateType.name === selectedValue ? 'selected' : '';
+      options += `<option value="${rateType.name}" ${selected}>${rateType.name}</option>`;
+    });
+    
+    // Agregar opción personalizada si el valor actual no está en la lista
+    if (selectedValue && !validOptions.rate_types.find(r => r.name === selectedValue)) {
+      options += `<option value="${selectedValue}" selected>${selectedValue} (No válido)</option>`;
+    }
+    
+    options += '</select>';
+    return options;
+  }
+
+  function generateSeasonOptions(selectedValue, categoryCode, errorIndex) {
+    if (!validOptions || !validOptions.seasons) {
+      return `<input type="text" class="form-control form-control-sm" value="${selectedValue || ''}" 
+                     onchange="updateErrorData(${errorIndex}, 'season_name', this.value)" placeholder="Temporada">`;
+    }
+
+    let options = `<select class="form-select form-select-sm" onchange="updateErrorData(${errorIndex}, 'season_name', this.value)">`;
+    options += '<option value="">Sin temporada</option>';
+    
+    // Mostrar todas las temporadas disponibles agrupadas por definición
+    Object.entries(validOptions.seasons).forEach(([defName, seasons]) => {
+      seasons.forEach(season => {
+        const selected = season === selectedValue ? 'selected' : '';
+        options += `<option value="${season}" ${selected}>${season} (${defName})</option>`;
+      });
+    });
+    
+    // Agregar opción personalizada si el valor actual no está en la lista
+    if (selectedValue) {
+      const allSeasons = Object.values(validOptions.seasons).flat();
+      if (!allSeasons.includes(selectedValue)) {
+        options += `<option value="${selectedValue}" selected>${selectedValue} (No válido)</option>`;
+      }
+    }
+    
+    options += '</select>';
+    return options;
+  }
+
+  function generateUnitsOptions(selectedValue, categoryCode, errorIndex) {
+    if (!validOptions || !validOptions.units) {
+      return `<input type="number" class="form-control form-control-sm" value="${selectedValue || ''}" 
+                     onchange="updateErrorData(${errorIndex}, 'units', this.value)" placeholder="Cantidad" min="1">`;
+    }
+
+    let options = `<select class="form-select form-select-sm" onchange="updateErrorData(${errorIndex}, 'units', this.value)">`;
+    options += '<option value="">Seleccionar...</option>';
+    
+    // Si hay categoría específica, mostrar solo sus unidades
+    if (categoryCode && validOptions.units[categoryCode]) {
+      validOptions.units[categoryCode].forEach(unit => {
+        const selected = unit == selectedValue ? 'selected' : '';
+        options += `<option value="${unit}" ${selected}>${unit}</option>`;
+      });
+    } else {
+      // Mostrar todas las unidades disponibles agrupadas por categoría
+      Object.entries(validOptions.units).forEach(([cat, units]) => {
+        units.forEach(unit => {
+          const selected = unit == selectedValue ? 'selected' : '';
+          options += `<option value="${unit}" ${selected}>${unit} (Cat. ${cat})</option>`;
+        });
+      });
+    }
+    
+    // Agregar opción personalizada si el valor actual no está en la lista
+    if (selectedValue) {
+      const allUnits = Object.values(validOptions.units).flat();
+      if (!allUnits.includes(parseInt(selectedValue))) {
+        options += `<option value="${selectedValue}" selected>${selectedValue} (No válido)</option>`;
+      }
+    }
+    
+    options += '</select>';
+    return options;
   }
 </script>

@@ -323,6 +323,31 @@ module Controller
           end
         end
 
+        # GET /admin/import/options - Obtener opciones válidas para formularios
+        app.get '/admin/import/options' do
+          content_type :json
+          
+          begin
+            suggestions_service = Service::ImportSuggestionsService.new
+            options = suggestions_service.get_valid_options
+            
+            {
+              success: true,
+              data: options,
+              message: "Opciones válidas obtenidas exitosamente"
+            }.to_json
+            
+          rescue => e
+            logger.error "Error getting import options: #{e.message}"
+            status 500
+            {
+              success: false,
+              message: "Error obteniendo opciones válidas",
+              error: e.message
+            }.to_json
+          end
+        end
+
       end
     end
   end

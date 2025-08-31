@@ -65,11 +65,16 @@ module Service
           # Usar datos procesados si están disponibles, sino usar datos raw
           error_data = row_info || extract_row_data_safe(row_data, column_mapping)
           
+          # Generar sugerencias inteligentes basadas en BD
+          suggestions_service = Service::ImportSuggestionsService.new
+          suggestions = suggestions_service.generate_suggestions_for_error(error_data, e.message)
+          
           error_result = {
             success: false,
             error: e.message,
             line: line_number,
-            data: error_data
+            data: error_data,
+            suggestions: suggestions
           }
           
           log_row_error(error_result)
