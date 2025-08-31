@@ -5,6 +5,7 @@ module Service
 
       # Errores específicos de procesamiento CSV
       class CsvValidationError < StandardError; end
+      class CsvParsingError < CsvValidationError; end
       class InvalidHeaderError < CsvValidationError; end
       class InvalidRowDataError < CsvValidationError; end
 

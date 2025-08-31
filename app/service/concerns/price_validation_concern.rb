@@ -17,13 +17,15 @@ module Service
       def validate_units_allowed(price_definition, time_measurement, units)
         case time_measurement.to_sym
         when :days
-          allowed_units = parse_units_list(price_definition.units_management_value_days_list)
+          allowed_units = parse_units_list(price_definition[:units_management_value_days_list])
         when :hours
-          allowed_units = parse_units_list(price_definition.units_management_value_hours_list)
+          allowed_units = parse_units_list(price_definition[:units_management_value_hours_list])
         when :minutes
-          allowed_units = parse_units_list(price_definition.units_management_value_minutes_list)
+          allowed_units = parse_units_list(price_definition[:units_management_value_minutes_list])
         when :months
-          allowed_units = parse_units_list(price_definition.units_management_value_months_list)
+          # Months are supported via time_measurement_months boolean, but units are fixed at 1
+          # Since there's no units_management_value_months_list, default to [1]
+          allowed_units = [1]
         else
           raise InvalidUnitsError, "Tipo de medición de tiempo inválido: #{time_measurement}"
         end
@@ -46,7 +48,6 @@ module Service
                  pd.units_management_value_days_list,
                  pd.units_management_value_hours_list,
                  pd.units_management_value_minutes_list,
-                 pd.units_management_value_months_list,
                  c.id as category_id, rl.id as rental_location_id, rt.id as rate_type_id
           FROM price_definitions pd
           JOIN category_rental_location_rate_types crlrt ON pd.id = crlrt.price_definition_id
